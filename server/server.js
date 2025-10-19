@@ -17,7 +17,10 @@ const app = express();
 // ✅ CORS Setup
 const allowedOrigins = process.env.CLIENT_URLS
   ? process.env.CLIENT_URLS.split(",")
-  : ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000"];
+  : ["http://localhost:5173",
+     "http://127.0.0.1:5173",
+     "http://localhost:3000",
+     "https://real-time-chat-delta-six.vercel.app"];
 
 const corsOptions = {
   origin: allowedOrigins,
