@@ -11,7 +11,7 @@ import { Server } from "socket.io";
 export let io;
 export const userSocketMap = new Map();
 
-// Create app and setup middlewares (these work in all environments)
+// Create app and setup middlewares (works in all environments)
 const app = express();
 
 // ✅ CORS Setup
@@ -28,7 +28,7 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: "5mb" }));
 
 // ✅ Routes
-app.use("/api/status", (req, res) => {
+app.get("/api/status", (req, res) => {
   res.status(200).json({ status: "healthy", time: new Date() });
 });
 
@@ -45,7 +45,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ✅ Start server only if not running in a serverless environment (like Vercel)
+// ✅ Start server locally with Socket.IO (skip on Vercel / serverless)
 if (process.env.VERCEL !== "1" && process.env.NODE_ENV !== "production") {
   const server = http.createServer(app);
 
@@ -94,7 +94,7 @@ if (process.env.VERCEL !== "1" && process.env.NODE_ENV !== "production") {
     console.error("🚨 Socket.IO connection error:", err.message);
   });
 
-  // ✅ Start Server
+  // ✅ Start local server
   const startServer = async () => {
     try {
       await connectDB();
@@ -112,5 +112,5 @@ if (process.env.VERCEL !== "1" && process.env.NODE_ENV !== "production") {
   startServer();
 }
 
-// ✅ Export for Vercel compatibility (Serverless handler)
+// ✅ Export app for Vercel Serverless
 export default app;
