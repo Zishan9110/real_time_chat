@@ -1,56 +1,48 @@
 import { generateToken } from "../lib/utils.js";
+import { connectDB } from "../lib/db.js";   // ⭐ ADD
 import User from "../models/User.js";
 import bcrypt from "bcryptjs";
 import cloudinary from "../lib/cloudinary.js";
 
-// ✅ Signup Controller
+
+// ================= SIGNUP =================
 export const signup = async (req, res) => {
-  const { fullName, email, password, bio } = req.body;
-
-  console.log("🟢 Signup API called with data:", req.body);
-
   try {
-    // Step 1: Validation
+    await connectDB();   // ⭐ MUST for Vercel
+
+    const { fullName, email, password, bio } = req.body;
+
     if (!fullName || !email || !password || !bio) {
-      console.log("⚠️ Missing field detected");
       return res.status(400).json({
         success: false,
         message: "All fields are required",
       });
     }
 
-    // Step 2: Check existing user
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      console.log("⚠️ User already exists:", email);
       return res.status(409).json({
         success: false,
         message: "Account already exists",
       });
     }
 
-    // Step 3: Hash password
-    const salt = await bcrypt.genSalt(10);
-    const hashPassword = await bcrypt.hash(password, salt);
-    console.log("🔑 Password hashed successfully");
+    const hashPassword = await bcrypt.hash(password, 10);
 
-    // Step 4: Create user
     const newUser = await User.create({
       fullName,
       email,
       password: hashPassword,
       bio,
     });
-    console.log("✅ User created successfully:", newUser._id);
 
-    // Step 5: Generate token
     const token = generateToken(newUser._id);
-    console.log("🎟️ Token generated:", token ? "YES" : "NO");
 
-    // Step 6: Response
+    const safeUser = await User.findById(newUser._id).select("-password");
+
     res.status(201).json({
       success: true,
-      userData: newUser,
+      userData: safeUser,
       token,
       message: "Account created successfully",
     });
@@ -59,46 +51,51 @@ export const signup = async (req, res) => {
     console.error("🔥 Signup error:", error);
     res.status(500).json({
       success: false,
-      message: "Internal server error",
-      error: error.message,
+      message: error.message,
     });
   }
 };
 
-// ✅ Login Controller
+
+// ================= LOGIN =================
 export const login = async (req, res) => {
   try {
+    await connectDB();   // ⭐ MUST for Vercel
+
     const { email, password } = req.body;
-    console.log("🟢 Login API called with:", email);
 
-    // Step 1: Find user
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and password required",
+      });
+    }
+
     const user = await User.findOne({ email });
+
     if (!user) {
-      console.log("❌ User not found:", email);
       return res.status(401).json({
         success: false,
         message: "Invalid credentials",
       });
     }
 
-    // Step 2: Check password
     const isPasswordCorrect = await bcrypt.compare(password, user.password);
+
     if (!isPasswordCorrect) {
-      console.log("❌ Incorrect password for:", email);
       return res.status(401).json({
         success: false,
         message: "Invalid credentials",
       });
     }
 
-    // Step 3: Generate token
     const token = generateToken(user._id);
-    console.log("✅ Login successful for:", email);
 
-    // Step 4: Response
+    const safeUser = await User.findById(user._id).select("-password");
+
     res.status(200).json({
       success: true,
-      userData: user,
+      userData: safeUser,
       token,
       message: "Login successful",
     });
@@ -107,56 +104,58 @@ export const login = async (req, res) => {
     console.error("🔥 Login error:", error);
     res.status(500).json({
       success: false,
-      message: "Internal server error",
-      error: error.message,
+      message: error.message,
     });
   }
 };
 
-// ✅ Check Auth Controller
-export const checkAuth = (req, res) => {
+
+// ================= CHECK AUTH =================
+export const checkAuth = async (req, res) => {
+  await connectDB();
+
   res.status(200).json({
     success: true,
     user: req.user,
   });
 };
 
-// ✅ Update Profile Controller
+
+// ================= UPDATE PROFILE =================
 export const updateProfile = async (req, res) => {
   try {
+    await connectDB();   // ⭐ MUST
+
     const { profilePic, fullName, bio } = req.body;
     const userId = req.user._id;
-
-    console.log("🟢 Update profile called for user:", userId);
 
     const updateData = { fullName, bio };
 
     if (profilePic) {
       const uploadResult = await cloudinary.uploader.upload(profilePic, {
-        upload_preset: process.env.CLOUDINARY_UPLOAD_PRESET, // ✅ use env variable
+        upload_preset: process.env.CLOUDINARY_UPLOAD_PRESET,
         folder: "user_profiles",
       });
+
       updateData.profilePic = uploadResult.secure_url;
-      console.log("📸 Profile pic uploaded:", uploadResult.secure_url);
     }
 
-    const updatedUser = await User.findByIdAndUpdate(userId, updateData, {
-      new: true,
-      runValidators: true,
-    }).select("-password");
-
-    console.log("✅ Profile updated for user:", updatedUser._id);
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      updateData,
+      { new: true }
+    ).select("-password");
 
     res.status(200).json({
       success: true,
       user: updatedUser,
     });
+
   } catch (error) {
     console.error("🔥 Update error:", error);
-    res.status(error.http_code || 500).json({
+    res.status(500).json({
       success: false,
       message: error.message,
-      errorType: error.name,
     });
   }
 };

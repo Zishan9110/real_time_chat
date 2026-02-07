@@ -1,30 +1,22 @@
 import mongoose from "mongoose";
 
-let cached = global.mongoose;
-
-if (!cached) {
-  cached = global.mongoose = {
-    conn: null,
-    promise: null,
-  };
-}
+let isConnected = false;
 
 export const connectDB = async () => {
-  if (cached.conn) {
-    console.log("✅ Using cached DB connection");
-    return cached.conn;
+  if (isConnected) {
+    return;
   }
 
-  if (!cached.promise) {
-    cached.promise = mongoose.connect(process.env.MONGODB_URI, {
+  try {
+    const conn = await mongoose.connect(process.env.MONGODB_URI, {
       bufferCommands: false,
-      maxPoolSize: 10,
-    }).then((mongoose) => {
-      console.log("✅ Database Connected");
-      return mongoose;
     });
-  }
 
-  cached.conn = await cached.promise;
-  return cached.conn;
+    isConnected = conn.connections[0].readyState === 1;
+
+    console.log("✅ Database Connected");
+  } catch (error) {
+    console.error("❌ Database Connection Error:", error.message);
+    throw error;
+  }
 };
