@@ -7,20 +7,25 @@ import userRouter from "./routes/userRoutes.js";
 import messageRouter from "./routes/messageRoutes.js";
 import { Server } from "socket.io";
 
-// Export these so other files can import them safely
 export let io;
 export const userSocketMap = new Map();
 
 const app = express();
 
 
-// ✅ ALWAYS connect DB (Vercel + local)  ⭐ IMPORTANT FIX
-connectDB()
-  .then(() => console.log("✅ MongoDB connected"))
-  .catch(err => console.error("❌ MongoDB connection failed:", err));
+// ✅ DB connect middleware (FIX FOR VERCEL)
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (err) {
+    console.error("DB middleware error:", err);
+    res.status(500).json({ message: "Database not connected" });
+  }
+});
 
 
-// ✅ CORS Setup
+// ✅ CORS
 const allowedOrigins = process.env.CLIENT_URLS
   ? process.env.CLIENT_URLS.split(",")
   : [
@@ -42,8 +47,7 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options(/.*/, cors(corsOptions)); // ✅ preflight safe
-
+app.options(/.*/, cors(corsOptions));
 
 app.use(express.json({ limit: "5mb" }));
 
@@ -57,9 +61,9 @@ app.use("/api/auth", userRouter);
 app.use("/api/message", messageRouter);
 
 
-// ✅ Global Error Handler
+// ✅ Global error handler
 app.use((err, req, res, next) => {
-  console.error("🔥 Unhandled Server Error:", err);
+  console.error("🔥 Server Error:", err);
   res.status(500).json({
     success: false,
     message: "Internal Server Error",
@@ -68,7 +72,7 @@ app.use((err, req, res, next) => {
 });
 
 
-// ✅ Local server + Socket.IO only (NOT Vercel)
+// ✅ Socket only for LOCAL (not vercel)
 if (process.env.VERCEL !== "1") {
   const server = http.createServer(app);
 
@@ -79,7 +83,7 @@ if (process.env.VERCEL !== "1") {
   });
 
   io.on("connection", (socket) => {
-    console.log(`🟢 New connection: ${socket.id}`);
+    console.log(`🟢 Socket connected: ${socket.id}`);
 
     const userId = socket.handshake.query.userId;
     if (!userId) return socket.disconnect(true);
@@ -106,6 +110,4 @@ if (process.env.VERCEL !== "1") {
   });
 }
 
-
-// ✅ Export for Vercel serverless
 export default app;
