@@ -11,24 +11,42 @@ import { Server } from "socket.io";
 export let io;
 export const userSocketMap = new Map();
 
-// Create app and setup middlewares (works in all environments)
 const app = express();
+
+
+// ✅ ALWAYS connect DB (Vercel + local)  ⭐ IMPORTANT FIX
+connectDB()
+  .then(() => console.log("✅ MongoDB connected"))
+  .catch(err => console.error("❌ MongoDB connection failed:", err));
+
 
 // ✅ CORS Setup
 const allowedOrigins = process.env.CLIENT_URLS
   ? process.env.CLIENT_URLS.split(",")
-  : ["http://localhost:5173",
-     "http://127.0.0.1:5173",
-     "http://localhost:3000",
-     "https://real-time-chat-app-frontend-swart.vercel.app"];
+  : [
+      "http://localhost:5173",
+      "http://127.0.0.1:5173",
+      "http://localhost:3000",
+      "https://real-time-chat-app-frontend-swart.vercel.app"
+    ];
 
 const corsOptions = {
-  origin: allowedOrigins,
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("CORS not allowed"));
+    }
+  },
   credentials: true,
 };
 
 app.use(cors(corsOptions));
+app.options(/.*/, cors(corsOptions)); // ✅ preflight safe
+
+
 app.use(express.json({ limit: "5mb" }));
+
 
 // ✅ Routes
 app.get("/api/status", (req, res) => {
@@ -37,6 +55,7 @@ app.get("/api/status", (req, res) => {
 
 app.use("/api/auth", userRouter);
 app.use("/api/message", messageRouter);
+
 
 // ✅ Global Error Handler
 app.use((err, req, res, next) => {
@@ -48,72 +67,45 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ✅ Start server locally with Socket.IO (skip on Vercel / serverless)
-if (process.env.VERCEL !== "1" && process.env.NODE_ENV !== "production") {
+
+// ✅ Local server + Socket.IO only (NOT Vercel)
+if (process.env.VERCEL !== "1") {
   const server = http.createServer(app);
 
-  // ✅ Initialize Socket.IO
   io = new Server(server, {
     cors: corsOptions,
     pingTimeout: 10000,
     pingInterval: 5000,
-    connectionStateRecovery: { maxDisconnectionDuration: 2 * 60 * 1000 },
   });
 
-  // ✅ Handle Socket Connections
   io.on("connection", (socket) => {
     console.log(`🟢 New connection: ${socket.id}`);
 
     const userId = socket.handshake.query.userId;
-    if (!userId) {
-      console.warn("⚠️ Missing userId in handshake query");
-      return socket.disconnect(true);
-    }
+    if (!userId) return socket.disconnect(true);
 
-    // Disconnect old socket if user already connected
     if (userSocketMap.has(userId)) {
-      const oldSocketId = userSocketMap.get(userId);
-      io.to(oldSocketId).disconnectSockets(true);
-      console.log(`🔄 Replaced old socket for user ${userId}`);
+      const oldId = userSocketMap.get(userId);
+      io.to(oldId).disconnectSockets(true);
     }
 
     userSocketMap.set(userId, socket.id);
     io.emit("onlineUsers", Array.from(userSocketMap.keys()));
 
     socket.on("disconnect", () => {
-      console.log(`🔴 Disconnected: ${socket.id}`);
       if (userSocketMap.get(userId) === socket.id) {
         userSocketMap.delete(userId);
         io.emit("onlineUsers", Array.from(userSocketMap.keys()));
       }
     });
-
-    socket.on("error", (err) => {
-      console.error(`❌ Socket error for user ${userId}:`, err);
-    });
   });
 
-  io.on("connection_error", (err) => {
-    console.error("🚨 Socket.IO connection error:", err.message);
+  const PORT = process.env.PORT || 3000;
+  server.listen(PORT, () => {
+    console.log(`✅ Local server running on ${PORT}`);
   });
-
-  // ✅ Start local server
-  const startServer = async () => {
-    try {
-      await connectDB();
-      const PORT = process.env.PORT || 3000;
-      server.listen(PORT, () => {
-        console.log(`✅ Server running on port ${PORT}`);
-        console.log(`🌐 WebSocket endpoint: ws://localhost:${PORT}`);
-      });
-    } catch (error) {
-      console.error("❌ Failed to start server:", error);
-      process.exit(1);
-    }
-  };
-
-  startServer();
 }
 
-// ✅ Export app for Vercel Serverless
+
+// ✅ Export for Vercel serverless
 export default app;
