@@ -20,7 +20,7 @@ const allowedOrigins = process.env.CLIENT_URLS
   : ["http://localhost:5173",
      "http://127.0.0.1:5173",
      "http://localhost:3000",
-     "https://real-time-chat-delta-six.vercel.app"];
+     "https://real-time-chat-app-frontend-swart.vercel.app"];
 
 const corsOptions = {
   origin: allowedOrigins,
