@@ -6,7 +6,6 @@ cloudinary.config({
     api_secret: process.env.CLOUDINARY_API_SECRET,
     secure: true,
 });
-
 export const uploadImage = async (file, folder = "user_profiles") => {
     if (!process.env.CLOUDINARY_UPLOAD_PRESET) {
         throw new Error("CLOUDINARY_UPLOAD_PRESET is missing in .env");
